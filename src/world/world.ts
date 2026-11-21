@@ -12,6 +12,15 @@ const neonColors = [0xff2e88, 0x00f0ff, 0x7c5cff, 0xffa044, 0x33f2b4];
 export class CityWorld {
   readonly group = new THREE.Group();
   readonly roadPositions: THREE.Vector3[] = [];
+  private readonly pickupPositions: THREE.Vector3[] = [];
+  private readonly collectedPickups: boolean[] = [];
+  private readonly hiddenPickupMatrix = new THREE.Matrix4().compose(
+    new THREE.Vector3(0, -100, 0),
+    new THREE.Quaternion(),
+    new THREE.Vector3(0, 0, 0),
+  );
+  private pickupOrbs: THREE.InstancedMesh | null = null;
+  private pickupRings: THREE.InstancedMesh | null = null;
   private readonly rng: () => number;
   private readonly physics: RapierTypes.World;
   private readonly rapier: RapierApi;
@@ -31,7 +40,36 @@ export class CityWorld {
     this.addBuildings();
     this.addPalms();
     this.addStreetDetails();
+    this.addPickups();
     this.group.updateMatrixWorld(true);
+  }
+
+  get pickupCount(): number {
+    return this.pickupPositions.length;
+  }
+
+  collectPickups(position: THREE.Vector3, radius = 3.2): number {
+    if (!this.pickupOrbs || !this.pickupRings) return 0;
+    const radiusSquared = radius * radius;
+    let collected = 0;
+
+    for (let index = 0; index < this.pickupPositions.length; index += 1) {
+      if (this.collectedPickups[index]) continue;
+      const pickup = this.pickupPositions[index];
+      const dx = position.x - pickup.x;
+      const dz = position.z - pickup.z;
+      if (dx * dx + dz * dz > radiusSquared) continue;
+      this.collectedPickups[index] = true;
+      this.pickupOrbs.setMatrixAt(index, this.hiddenPickupMatrix);
+      this.pickupRings.setMatrixAt(index, this.hiddenPickupMatrix);
+      collected += 1;
+    }
+
+    if (collected > 0) {
+      this.pickupOrbs.instanceMatrix.needsUpdate = true;
+      this.pickupRings.instanceMatrix.needsUpdate = true;
+    }
+    return collected;
   }
 
   private addGroundAndRoads(): void {
@@ -139,28 +177,46 @@ export class CityWorld {
           );
 
           const neonIndex = Math.floor(this.rng() * neonMaterials.length);
+          const facades = [
+            { localX: 0, localZ: depth / 2 + 0.08, angle: 0, span: width },
+            { localX: 0, localZ: -depth / 2 - 0.08, angle: Math.PI, span: width },
+            { localX: width / 2 + 0.08, localZ: 0, angle: Math.PI / 2, span: depth },
+            { localX: -width / 2 - 0.08, localZ: 0, angle: -Math.PI / 2, span: depth },
+          ];
+          const toWorldX = (localX: number, localZ: number) => x + Math.cos(rotationY) * localX + Math.sin(rotationY) * localZ;
+          const toWorldZ = (localX: number, localZ: number) => z - Math.sin(rotationY) * localX + Math.cos(rotationY) * localZ;
+
+          // Wrap the neon bands around every face so the skyline reads from any approach.
           for (const y of [3.5, height * 0.62, height - 1]) {
-            temp.position.set(x, y, z + depth / 2 + 0.09);
-            temp.rotation.set(0, rotationY, 0);
-            temp.scale.set(width * 0.92, 1, 1);
-            temp.updateMatrix();
-            neonBuckets[neonIndex].push(temp.matrix.clone());
+            for (const facade of facades) {
+              const sideFace = Math.abs(facade.angle) > 0.1;
+              const localX = sideFace ? facade.localX : 0;
+              const localZ = sideFace ? 0 : facade.localZ;
+              temp.position.set(toWorldX(localX, localZ), y, toWorldZ(localX, localZ));
+              temp.rotation.set(0, rotationY + facade.angle, 0);
+              temp.scale.set(facade.span * 0.92, 1, 1);
+              temp.updateMatrix();
+              neonBuckets[neonIndex].push(temp.matrix.clone());
+            }
           }
 
           const floors = Math.max(2, Math.floor(height / 3.2));
-          const columns = Math.max(2, Math.floor(width / 2.2));
-          for (let floor = 1; floor < floors; floor += 1) {
-            for (let col = 0; col < columns; col += 1) {
-              if (this.rng() < 0.22) continue;
-              const windowMaterial = Math.floor(this.rng() * windowMaterials.length);
-              const localX = -width / 2 + ((col + 0.5) * width) / columns;
-              const py = floor * (height / floors) + 0.7;
-              const faceDepth = depth / 2 + 0.06;
-              temp.position.set(x + Math.cos(rotationY) * localX + Math.sin(rotationY) * faceDepth, py, z - Math.sin(rotationY) * localX + Math.cos(rotationY) * faceDepth);
-              temp.rotation.set(0, rotationY, 0);
-              temp.scale.set(0.92, 0.72, 1);
-              temp.updateMatrix();
-              windowBuckets[windowMaterial].push(temp.matrix.clone());
+          for (const facade of facades) {
+            const columns = Math.max(2, Math.floor(facade.span / 2.2));
+            for (let floor = 1; floor < floors; floor += 1) {
+              for (let col = 0; col < columns; col += 1) {
+                if (this.rng() < 0.22) continue;
+                const windowMaterial = Math.floor(this.rng() * windowMaterials.length);
+                const offset = -facade.span / 2 + ((col + 0.5) * facade.span) / columns;
+                const localX = facade.localX === 0 ? offset : facade.localX;
+                const localZ = facade.localZ === 0 ? offset : facade.localZ;
+                const py = floor * (height / floors) + 0.7;
+                temp.position.set(toWorldX(localX, localZ), py, toWorldZ(localX, localZ));
+                temp.rotation.set(0, rotationY + facade.angle, 0);
+                temp.scale.set(0.92, 0.72, 1);
+                temp.updateMatrix();
+                windowBuckets[windowMaterial].push(temp.matrix.clone());
+              }
             }
           }
         }
@@ -183,24 +239,22 @@ export class CityWorld {
 
     for (let roadIndex = 0; roadIndex <= BLOCKS; roadIndex += 1) {
       const line = -BLOCKS * BLOCK_SIZE / 2 + roadIndex * BLOCK_SIZE;
-      for (let block = 0; block < BLOCKS; block += 1) {
+      for (let block = 0; block < BLOCKS; block += 2) {
         const along = -CITY_HALF + block * BLOCK_SIZE + BLOCK_SIZE / 2;
         for (const side of [-1, 1]) {
-          for (const alongSide of [-1, 1]) {
-            const x = roadIndex % 2 === 0 ? line + side * 11.2 : along + alongSide * 19;
-            const z = roadIndex % 2 === 0 ? along + alongSide * 19 : line + side * 11.2;
-            temp.position.set(x, 2.8, z);
-            temp.rotation.set(0, 0, 0);
+          const x = roadIndex % 2 === 0 ? line + side * 11.2 : along;
+          const z = roadIndex % 2 === 0 ? along : line + side * 11.2;
+          temp.position.set(x, 2.8, z);
+          temp.rotation.set(0, 0, 0);
+          temp.scale.set(1, 1, 1);
+          temp.updateMatrix();
+          trunkMatrices.push(temp.matrix.clone());
+          for (let leaf = 0; leaf < 5; leaf += 1) {
+            temp.position.set(x + Math.sin((leaf / 5) * Math.PI * 2) * 1.2, 5.2, z + Math.cos((leaf / 5) * Math.PI * 2) * 1.2);
+            temp.rotation.set(Math.cos((leaf / 5) * Math.PI * 2) * 0.95, (leaf / 5) * Math.PI * 2, Math.sin((leaf / 5) * Math.PI * 2) * 0.95);
             temp.scale.set(1, 1, 1);
             temp.updateMatrix();
-            trunkMatrices.push(temp.matrix.clone());
-            for (let leaf = 0; leaf < 5; leaf += 1) {
-              temp.position.set(x + Math.sin((leaf / 5) * Math.PI * 2) * 1.2, 5.2, z + Math.cos((leaf / 5) * Math.PI * 2) * 1.2);
-              temp.rotation.set(Math.cos((leaf / 5) * Math.PI * 2) * 0.95, (leaf / 5) * Math.PI * 2, Math.sin((leaf / 5) * Math.PI * 2) * 0.95);
-              temp.scale.set(1, 1, 1);
-              temp.updateMatrix();
-              leafMatrices.push(temp.matrix.clone());
-            }
+            leafMatrices.push(temp.matrix.clone());
           }
         }
       }
@@ -219,7 +273,7 @@ export class CityWorld {
     const temp = new THREE.Object3D();
     for (let i = 0; i <= BLOCKS; i += 1) {
       const line = -BLOCKS * BLOCK_SIZE / 2 + i * BLOCK_SIZE;
-      for (let along = -CITY_HALF + 12; along <= CITY_HALF; along += 28) {
+      for (let along = -CITY_HALF + 12; along <= CITY_HALF; along += 56) {
         for (const side of [-1, 1]) {
           const x = i % 2 === 0 ? line + side * 10.2 : along;
           const z = i % 2 === 0 ? along : line + side * 10.2;
@@ -239,6 +293,47 @@ export class CityWorld {
     glowMatrices.forEach((matrix, i) => lamps.setMatrixAt(i, matrix));
     lightGroup.add(lamps);
     this.group.add(lightGroup);
+  }
+
+  private addPickups(): void {
+    const orbGeometry = new THREE.SphereGeometry(0.46, 14, 10);
+    const orbMaterial = new THREE.MeshBasicMaterial({ color: 0xffd56b, toneMapped: false });
+    const ringGeometry = new THREE.TorusGeometry(0.72, 0.075, 8, 20);
+    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00f0ff, toneMapped: false });
+    const temp = new THREE.Object3D();
+
+    for (let roadIndex = 0; roadIndex <= BLOCKS; roadIndex += 1) {
+      const line = -BLOCKS * BLOCK_SIZE / 2 + roadIndex * BLOCK_SIZE;
+      for (let block = 0; block < BLOCKS; block += 1) {
+        if ((roadIndex + block) % 2 !== 0) continue;
+        const along = -BLOCKS * BLOCK_SIZE / 2 + block * BLOCK_SIZE + BLOCK_SIZE / 2;
+        const onVerticalRoad = block % 2 === 0;
+        this.pickupPositions.push(
+          onVerticalRoad ? new THREE.Vector3(line, 0.88, along) : new THREE.Vector3(along, 0.88, line),
+        );
+      }
+    }
+
+    this.collectedPickups.push(...this.pickupPositions.map(() => false));
+    this.pickupOrbs = new THREE.InstancedMesh(orbGeometry, orbMaterial, this.pickupCount);
+    this.pickupRings = new THREE.InstancedMesh(ringGeometry, ringMaterial, this.pickupCount);
+    this.pickupPositions.forEach((position, index) => {
+      temp.position.copy(position);
+      temp.rotation.set(0, 0, 0);
+      temp.scale.setScalar(1);
+      temp.updateMatrix();
+      this.pickupOrbs!.setMatrixAt(index, temp.matrix);
+
+      temp.position.y = 0.42;
+      temp.rotation.set(Math.PI / 2, 0, 0);
+      temp.updateMatrix();
+      this.pickupRings!.setMatrixAt(index, temp.matrix);
+    });
+    this.pickupOrbs.instanceMatrix.needsUpdate = true;
+    this.pickupRings.instanceMatrix.needsUpdate = true;
+    this.pickupOrbs.computeBoundingSphere();
+    this.pickupRings.computeBoundingSphere();
+    this.group.add(this.pickupOrbs, this.pickupRings);
   }
 
   private addInstances(geometry: THREE.BufferGeometry, material: THREE.Material, matrices: THREE.Matrix4[]): void {

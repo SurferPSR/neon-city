@@ -109,11 +109,17 @@ export class PlayerVehicle {
     const acceleration = input.throttle >= 0 ? 30 : 52;
     longitudinal += input.throttle * acceleration * dt;
     longitudinal = THREE.MathUtils.clamp(longitudinal, -14, 44);
+    if (input.handbrake) {
+      const handbrakeDeceleration = 38 * dt;
+      longitudinal = Math.sign(longitudinal) * Math.max(0, Math.abs(longitudinal) - handbrakeDeceleration);
+    }
     lateral *= Math.pow(input.handbrake ? 0.992 : 0.88, dt * 60);
     longitudinal *= Math.pow(input.throttle === 0 ? 0.986 : 0.998, dt * 60);
     const speedFactor = THREE.MathUtils.clamp(Math.abs(longitudinal) / 8, 0.12, 1.4);
     const turnRate = 1.72 * speedFactor * (input.handbrake ? 1.45 : 1);
-    const nextYaw = yaw + input.steer * turnRate * dt * (longitudinal >= -0.5 ? 1 : -1);
+    // In Three.js, positive yaw from a -Z heading turns toward -X (left),
+    // so invert the steering input to make A left and D right.
+    const nextYaw = yaw - input.steer * turnRate * dt * (longitudinal >= -0.5 ? 1 : -1);
     const nextForward = new THREE.Vector3(-Math.sin(nextYaw), 0, -Math.cos(nextYaw));
     const nextRight = new THREE.Vector3(Math.cos(nextYaw), 0, -Math.sin(nextYaw));
     this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, nextYaw), true);

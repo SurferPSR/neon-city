@@ -71,6 +71,13 @@ button { color: inherit; }
 .hud { position: fixed; z-index: 4; inset: auto 0 0; display: flex; align-items: end; justify-content: space-between; padding: 0 clamp(22px, 5vw, 76px) 64px; opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; pointer-events: none; }
 .hud-visible { opacity: 1; transform: none; }
 .speed-card { width: 244px; padding: 17px 20px 14px; border: 1px solid rgba(255,255,255,.18); background: linear-gradient(135deg, rgba(15,14,26,.78), rgba(23,15,33,.43)); backdrop-filter: blur(16px); }
+.speed-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.orb-score { display: inline-flex; align-items: center; gap: 6px; }
+.orb-score > i { width: 8px; height: 8px; border-radius: 50%; background: #ffd56b; box-shadow: 0 0 10px #ffd56b; }
+.orb-score > span { color: rgba(255,255,255,.52); font-family: var(--mono); font-size: 7px; letter-spacing: .08em; }
+.orb-score b { margin-left: 3px; color: #fff; font-size: 10px; font-weight: 500; }
+.orb-score em { color: rgba(255,255,255,.38); font-size: 7px; font-style: normal; }
+.orb-score em span { color: var(--cyan); }
 .hud-label { display: block; color: rgba(255,255,255,.51); font-family: var(--mono); font-size: 8px; letter-spacing: .16em; }
 .speed-value { display: flex; align-items: baseline; gap: 8px; margin-top: 3px; }
 .speed-value strong { font-family: 'Barlow Condensed', sans-serif; font-size: 59px; font-weight: 500; line-height: 1; letter-spacing: .01em; }

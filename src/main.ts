@@ -24,7 +24,7 @@ app.innerHTML = `
     <div class="intro-copy">
       <p class="eyebrow"><span class="eyebrow-line"></span> WELCOME TO THE AFTERGLOW</p>
       <h1>NEON<br><span>CITY</span></h1>
-      <p class="intro-description">The night is yours.<br>Find your line through the city.</p>
+      <p class="intro-description">The night is yours.<br>Collect neon orbs and build your score.</p>
       <button id="play-button" class="play-button"><span>ENTER THE CITY</span><b>↗</b></button>
       <p class="intro-meta">OPEN WORLD <span>·</span> NIGHT DRIVE <span>·</span> NO RULES</p>
     </div>
@@ -32,7 +32,7 @@ app.innerHTML = `
     <div class="intro-footer"><span>MIAMI, FLORIDA</span><span>01 — 08</span><span>STAY FOR THE SUNRISE</span></div>
   </section>
   <aside id="hud" class="hud" aria-live="polite">
-    <div class="hud-left"><div class="speed-card"><span class="hud-label">GROUND SPEED</span><div class="speed-value"><strong id="speed-value">000</strong><span>KM/H</span></div><div class="speed-track"><i id="speed-bar"></i></div><div class="gear-row"><span>GEAR <b id="gear-value">N</b></span><span>DRIVE MODE <b id="drive-value">CRUISE</b></span></div></div></div>
+    <div class="hud-left"><div class="speed-card"><div class="speed-heading"><span class="hud-label">GROUND SPEED</span><span class="orb-score"><i aria-hidden="true"></i><span>ORBS <b id="score-value">00</b><em>/ <span id="score-total">00</span></em></span></span></div><div class="speed-value"><strong id="speed-value">000</strong><span>KM/H</span></div><div class="speed-track"><i id="speed-bar"></i></div><div class="gear-row"><span>GEAR <b id="gear-value">N</b></span><span>DRIVE MODE <b id="drive-value">CRUISE</b></span></div></div></div>
     <div class="hud-right"><div class="district-card"><span class="hud-label">CURRENT DISTRICT</span><strong>OCEAN DRIVE</strong><span class="district-coords">SOUTH BEACH <i>↗</i></span></div><div class="mini-map"><div class="map-grid"></div><span class="map-player"></span><span class="map-pulse"></span><span class="map-label">MAP / 01</span></div></div>
     <div class="control-hint"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>DRIVE</span><span class="hint-gap"></span><span class="keycap wide">SPACE</span><span>HANDBRAKE</span></div>
   </aside>
@@ -86,6 +86,7 @@ const physics = new RAPIER.World({ x: 0, y: -19.62, z: 0 });
 physics.timestep = 1 / 60;
 const city = new CityWorld(physics, RAPIER);
 city.build();
+document.querySelector<HTMLElement>('#score-total')!.textContent = String(city.pickupCount).padStart(2, '0');
 scene.add(city.group);
 const vehicle = new PlayerVehicle(physics, RAPIER);
 scene.add(vehicle.visual);
@@ -148,8 +149,10 @@ document.querySelector<HTMLButtonElement>('#resume-button')!.addEventListener('c
 });
 const speedValue = document.querySelector<HTMLElement>('#speed-value')!;
 const speedBar = document.querySelector<HTMLElement>('#speed-bar')!;
+const scoreValue = document.querySelector<HTMLElement>('#score-value')!;
 const gearValue = document.querySelector<HTMLElement>('#gear-value')!;
 const driveValue = document.querySelector<HTMLElement>('#drive-value')!;
+let score = 0;
 let lastFrame = performance.now();
 let hudElapsed = 0;
 
@@ -164,6 +167,13 @@ function animate(frameTime: number): void {
     camera.lookAt(position);
   } else {
     chaseCamera.update(camera, position, vehicle.yaw, vehicle.speedKmh, delta);
+  }
+  if (started && !paused) {
+    const collected = city.collectPickups(position);
+    if (collected > 0) {
+      score += collected;
+      scoreValue.textContent = String(score).padStart(2, '0');
+    }
   }
   if (started && !paused) {
     hudElapsed += delta;

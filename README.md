@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Use `WASD` or the arrow keys to drive and steer. Hold `Space` for the handbrake. Press `V` to switch between the chase and overhead cameras, and `Esc` to pause.
+Use `W`/`↑` to accelerate, `S`/`↓` to brake or reverse, `A`/`←` to steer left, and `D`/`→` to steer right. Hold `Space` for the handbrake. Press `V` to switch between the chase and overhead cameras, and `Esc` to pause.
 
 ## Build
 
@@ -25,6 +25,7 @@ npm run preview
 - Procedural 8 × 8 city blocks with instanced buildings, windows, palms, streets, sidewalks, and road markings.
 - Rapier rigid-body vehicle with acceleration, braking, handbrake slides, and building collisions.
 - Third-person chase camera, stylized sunset-to-night sky, fog, and neon bloom.
+- 36 neon orb pickups with a live score counter in the HUD.
 - Keyboard controls, start screen, speed HUD, and pause screen.
 
-Later stages from the design brief (traffic, pursuit, collectible currency, radio, rain, and deployment) are not part of this first playable build.
+Later stages from the design brief (traffic, pursuit, spendable currency, radio, rain, and deployment) are not part of this first playable build.
